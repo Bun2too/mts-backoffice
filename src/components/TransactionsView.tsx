@@ -1,104 +1,22 @@
 import { useState } from 'react';
 import type { User, Transaction, TxType, TxStatus } from '../types';
-import { canEditData } from '../types';
-import { scopedTransactions, scopedAccounts, MOCK_BRANCHES } from '../data/mockData';
-import { fmt, TX_STATUS_CLASS, SectionHeader, Toast, ReadOnlyBanner } from './shared';
-
-interface EditModalProps {
-  tx: Transaction;
-  editable: boolean;
-  onClose: () => void;
-  onSave: (tx: Transaction) => void;
-  onCancel: (id: string) => void;
-  onRebill: (id: string) => void;
-}
-
-function EditModal({ tx, editable, onClose, onSave, onCancel, onRebill }: EditModalProps) {
-  const [draft, setDraft] = useState({ ...tx });
-  const canAction = editable;
-  const canEdit   = canAction && (tx.status === 'pending' || tx.status === 'failed');
-  const canCancel = canAction && (tx.status === 'pending' || tx.status === 'settled');
-  const canRebill = canAction && (tx.status === 'cancelled' || tx.status === 'failed');
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '13px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.65rem', color: 'var(--accent)', marginBottom: 2 }}>{tx.id}</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{tx.description}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className={`badge ${TX_STATUS_CLASS[tx.status]}`}>{tx.status}</span>
-            {!editable && <span className="badge badge-amber">View Only</span>}
-            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-foreground)', fontSize: '1.1rem', cursor: 'pointer', marginLeft: 4 }}>✕</button>
-          </div>
-        </div>
-
-        <div style={{ padding: '18px 20px' }}>
-          <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-            {[
-              { l: 'Type',   v: draft.type },
-              { l: 'Action', v: draft.action },
-              ...(draft.symbol ? [{ l: 'Symbol', v: draft.symbol }] : []),
-            ].map(f => (
-              <div key={f.l}>
-                <div style={{ fontSize: '0.58rem', color: 'var(--muted-foreground)', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'var(--font-jetbrains)', marginBottom: 3 }}>{f.l}</div>
-                <div style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--foreground)', textTransform: 'uppercase' }}>{f.v}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <Field label="Account"><input value={draft.accountName} onChange={e => setDraft(d => ({ ...d, accountName: e.target.value }))} disabled={!canEdit} style={!canEdit ? { opacity: 0.5 } : {}} /></Field>
-            <Field label="Account ID"><input value={draft.accountId} disabled style={{ opacity: 0.5 }} /></Field>
-            {draft.quantity !== undefined && <Field label="Quantity"><input type="number" value={draft.quantity} onChange={e => setDraft(d => ({ ...d, quantity: Number(e.target.value) }))} disabled={!canEdit} style={!canEdit ? { opacity: 0.5 } : {}} /></Field>}
-            {draft.price !== undefined && <Field label="Price"><input type="number" step="0.01" value={draft.price} onChange={e => setDraft(d => ({ ...d, price: Number(e.target.value) }))} disabled={!canEdit} style={!canEdit ? { opacity: 0.5 } : {}} /></Field>}
-            <Field label="Amount"><input type="number" step="0.01" value={draft.amount} onChange={e => setDraft(d => ({ ...d, amount: Number(e.target.value) }))} disabled={!canEdit} style={!canEdit ? { opacity: 0.5 } : {}} /></Field>
-            <Field label="Trade Date"><input type="date" value={draft.tradeDate} onChange={e => setDraft(d => ({ ...d, tradeDate: e.target.value }))} disabled={!canEdit} style={!canEdit ? { opacity: 0.5 } : {}} /></Field>
-            <Field label="Settle Date"><input type="date" value={draft.settleDate} onChange={e => setDraft(d => ({ ...d, settleDate: e.target.value }))} disabled={!canEdit} style={!canEdit ? { opacity: 0.5 } : {}} /></Field>
-            <Field label="CSR"><input value={draft.csrName} disabled style={{ opacity: 0.5 }} /></Field>
-            <Field label="Notes" style={{ gridColumn: '1 / -1' }}>
-              <textarea value={draft.notes ?? ''} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} rows={2} disabled={!canEdit} style={!canEdit ? { opacity: 0.5, resize: 'none' } : { resize: 'vertical' }} />
-            </Field>
-          </div>
-        </div>
-
-        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-          {canRebill && <button className="btn-warn" onClick={() => onRebill(tx.id)}>Rebill</button>}
-          {canCancel && <button className="btn-danger" onClick={() => onCancel(tx.id)}>Cancel Transaction</button>}
-          {canEdit   && <button className="btn-primary" onClick={() => onSave(draft)}>Save Changes</button>}
-          {!canEdit && !canCancel && !canRebill && editable && (
-            <span style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', alignSelf: 'center' }}>No actions for this status.</span>
-          )}
-          <button className="btn-secondary" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div style={style}>
-      <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 600, color: 'var(--muted-foreground)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
+import { useScopedData } from '../context/DataContext';
+import TransactionEditor from './TransactionEditor';
+import { fmt, TX_STATUS_CLASS, SectionHeader, ReadOnlyBanner } from './shared';
 
 interface Props { user: User }
 
 export default function TransactionsView({ user }: Props) {
-  const [txns, setTxns]             = useState<Transaction[]>(scopedTransactions(user));
+  const { scopedTransactions, scopedAccounts, branches: MOCK_BRANCHES } = useScopedData();
+  const txns = scopedTransactions(user);
+  const [creating, setCreating] = useState(false);
   const [filterType, setFilterType] = useState<TxType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<TxStatus | 'all'>('all');
   const [filterAccount, setFilterAccount] = useState('all');
   const [filterBranch, setFilterBranch]   = useState('all');
   const [search, setSearch]         = useState('');
   const [selected, setSelected]     = useState<Transaction | null>(null);
-  const [toast, setToast]           = useState('');
-  const editable = canEditData(user.level);
+  const editable = ['firm', 'branch'].includes(user.level);
 
   const accounts = scopedAccounts(user);
 
@@ -114,16 +32,13 @@ export default function TransactionsView({ user }: Props) {
     return true;
   });
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  const handleSave   = (u: Transaction) => { setTxns(ts => ts.map(t => t.id === u.id ? u : t)); setSelected(null); showToast(`${u.id} saved.`); };
-  const handleCancel = (id: string)     => { setTxns(ts => ts.map(t => t.id === id ? { ...t, status: 'cancelled' } : t)); setSelected(null); showToast(`${id} cancelled.`); };
-  const handleRebill = (id: string)     => { setTxns(ts => ts.map(t => t.id === id ? { ...t, status: 'rebilled' } : t)); setSelected(null); showToast(`${id} rebilled.`); };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '16px 24px 0', flexShrink: 0 }}>
-        <SectionHeader title="Transactions" sub={`${filtered.length} records`} />
+        <div className="view-heading"><SectionHeader title="Transactions" sub={`${filtered.length} records`} />{editable && <button className="btn-primary" disabled={!accounts.length} onClick={() => setCreating(true)}>+ New Transaction</button>}</div>
+        <p className="demo-note">Settled edits recalculate account balances and positions. Changes are saved in this browser.</p>
         {!editable && <ReadOnlyBanner />}
 
         {/* Filters */}
@@ -208,10 +123,7 @@ export default function TransactionsView({ user }: Props) {
         </table>
       </div>
 
-      {selected && (
-        <EditModal tx={selected} editable={editable} onClose={() => setSelected(null)} onSave={handleSave} onCancel={handleCancel} onRebill={handleRebill} />
-      )}
-      <Toast message={toast} />
+      {(selected || creating) && <TransactionEditor transaction={selected} user={user} onClose={() => { setSelected(null); setCreating(false); }} />}
     </div>
   );
 }

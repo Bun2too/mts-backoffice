@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AccountRecord, User, UserLevel } from '../types';
-import { MOCK_ACCOUNTS, MOCK_BRANCHES, MOCK_REPS, scopedAccounts } from '../data/mockData';
+import { useScopedData } from '../context/DataContext';
 import { fmt, StatusBadge, PnlCell, TH, TD, SectionHeader, Toast } from './shared';
 
 const ACCOUNT_TYPES = ['individual', 'joint', 'trust', 'ira', 'corporate'] as const;
@@ -22,6 +22,7 @@ const EMPTY: AccountRecord = {
 };
 
 function AccountModal({ account, isNew, userLevel, onClose, onSave, onDelete }: ModalProps) {
+  const { branches: MOCK_BRANCHES, reps: MOCK_REPS } = useScopedData();
   const [draft, setDraft] = useState<AccountRecord>(
     isNew ? { ...EMPTY, id: `ACC-${Date.now().toString().slice(-5)}` } : { ...account! }
   );
@@ -45,11 +46,11 @@ function AccountModal({ account, isNew, userLevel, onClose, onSave, onDelete }: 
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '13px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>{isNew ? 'New Account' : 'Edit Account'}</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>{isNew ? 'New Account' : canManage ? 'Edit Account' : 'Account Details'}</span>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-foreground)', fontSize: '1.1rem', cursor: 'pointer' }}>✕</button>
         </div>
 
-        <div style={{ padding: '18px 20px' }}>
+        <fieldset disabled={!canManage} style={{ padding: '18px 20px', border: 0 }}>
           {/* Identification */}
           <div style={{ marginBottom: 16 }}>
             <SectionLabel>Identification</SectionLabel>
@@ -95,7 +96,8 @@ function AccountModal({ account, isNew, userLevel, onClose, onSave, onDelete }: 
               <Field label="Assigned Rep">
                 {canManage ? (
                   <select value={draft.repId} onChange={e => handleRepChange(e.target.value)}>
-                    {MOCK_REPS.filter(r => r.branchId === draft.branchId || true).map(r => (
+                    <option value="">Unassigned</option>
+                    {MOCK_REPS.filter(r => r.status === 'active').map(r => (
                       <option key={r.id} value={r.id}>{r.name} ({r.branchName})</option>
                     ))}
                   </select>
@@ -110,7 +112,7 @@ function AccountModal({ account, isNew, userLevel, onClose, onSave, onDelete }: 
               </p>
             )}
           </div>
-        </div>
+        </fieldset>
 
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
           {canManage && !isNew && !confirmDelete && (
@@ -125,9 +127,9 @@ function AccountModal({ account, isNew, userLevel, onClose, onSave, onDelete }: 
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button className="btn-primary" onClick={() => onSave(draft)}>
+            {canManage && <button className="btn-primary" onClick={() => onSave(draft)}>
               {isNew ? 'Create Account' : 'Save Changes'}
-            </button>
+            </button>}
           </div>
         </div>
       </div>
@@ -145,7 +147,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 interface Props { user: User }
 
 export default function AccountManagementView({ user }: Props) {
-  const [accounts, setAccounts] = useState<AccountRecord[]>(scopedAccounts(user));
+  const { scopedAccounts, branches: MOCK_BRANCHES, updateAccount, deleteAccount } = useScopedData();
+  const accounts = scopedAccounts(user);
   const [modal, setModal] = useState<{ account: AccountRecord | null; isNew: boolean } | null>(null);
   const [filterBranch, setFilterBranch] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -168,13 +171,13 @@ export default function AccountManagementView({ user }: Props) {
   const totalValue = filtered.reduce((s, a) => s + a.totalValue, 0);
 
   const handleSave = (a: AccountRecord) => {
-    setAccounts(as => as.some(x => x.id === a.id) ? as.map(x => x.id === a.id ? a : x) : [...as, a]);
+    try { updateAccount(a); } catch (e) { showToast((e as Error).message); return; }
     setModal(null);
     showToast(modal?.isNew ? `Account ${a.id} created.` : `Account ${a.id} updated.`);
   };
 
   const handleDelete = (id: string) => {
-    setAccounts(as => as.filter(a => a.id !== id));
+    try { deleteAccount(id); } catch (e) { showToast((e as Error).message); return; }
     setModal(null);
     showToast('Account deleted.');
   };

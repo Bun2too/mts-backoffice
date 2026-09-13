@@ -39,7 +39,7 @@ export function MonoCell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function TH({ children, right }: { children: React.ReactNode; right?: boolean }) {
+export function TH({ children, right }: { children?: React.ReactNode; right?: boolean }) {
   return (
     <th style={{ padding: '9px 10px', textAlign: right ? 'right' : 'left', fontSize: '0.6rem', color: 'var(--muted-foreground)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
       {children}
@@ -47,7 +47,7 @@ export function TH({ children, right }: { children: React.ReactNode; right?: boo
   );
 }
 
-export function TD({ children, right, style }: { children: React.ReactNode; right?: boolean; style?: React.CSSProperties }) {
+export function TD({ children, right, style }: { children?: React.ReactNode; right?: boolean; style?: React.CSSProperties }) {
   return (
     <td style={{ padding: '8px 10px', textAlign: right ? 'right' : 'left', ...style }}>
       {children}
@@ -87,14 +87,14 @@ export function GroupBySelect({
 export function Toast({ message }: { message: string }) {
   if (!message) return null;
   return (
-    <div style={{
+    <div role="status" style={{
       position: 'fixed', bottom: 24, right: 24, zIndex: 200,
       background: 'var(--card)', border: '1px solid var(--gain)',
       borderRadius: 3, padding: '10px 16px', fontSize: '0.78rem',
       color: 'var(--gain)', fontFamily: 'var(--font-jetbrains)',
       boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
     }}>
-      ✓ {message}
+      {message}
     </div>
   );
 }
@@ -104,7 +104,7 @@ export function ReadOnlyBanner() {
     <div style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 3, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{ color: 'var(--warn)', fontSize: '0.7rem' }}>⚠</span>
       <span style={{ fontSize: '0.7rem', color: 'var(--warn)' }}>
-        View only — your account level does not have edit permissions.
+        View only — your role does not have edit permissions.
       </span>
     </div>
   );

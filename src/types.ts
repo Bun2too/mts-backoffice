@@ -44,6 +44,7 @@ export interface Rep {
   phone: string;
   status: 'active' | 'inactive';
   accountCount: number;
+  assignedAccountIds?: string[];
 }
 
 export interface AccountRecord {
@@ -139,10 +140,38 @@ export type AppView =
   | 'balances'
   | 'branches'
   | 'accounts'
-  | 'profile';
+  | 'profile'
+  | 'users'
+  | 'reps'
+  | 'firm-settings';
 
 // Permission helpers
-export const canEditData = (level: UserLevel) => level !== 'account';
+export const canEditData = (level: UserLevel) => level === 'firm' || level === 'branch';
 export const canManageBranches = (level: UserLevel) => level === 'firm';
 export const canManageAccounts = (level: UserLevel) => level === 'firm';
 export const canAssignRep = (level: UserLevel) => level === 'firm';
+
+export type Theme = 'dark' | 'light';
+export interface AppUserRecord {
+  id: string; name: string; email: string; phone: string; level: UserLevel;
+  role: string; firmId: string; branchId?: string; repId?: string; accountId?: string;
+  status: User['status']; createdAt: string; approvedBy?: string; password?: string; lastLogin?: string;
+}
+export interface PendingRegistration {
+  id: string; name: string; email: string; phone: string; desiredLevel: UserLevel;
+  branchId?: string; accountId?: string; repId?: string; password: string;
+  message: string; submittedAt: string; status: 'pending' | 'approved' | 'rejected';
+}
+export interface FirmInfo {
+  logoDataUrl?: string;
+  id: string; name: string; legalName: string; address: string; city: string;
+  state: string; zip: string; country: string; phone: string; email: string;
+  website: string; foundedYear: string; aum: string; crd: string; ein: string;
+  licenseType: string; regulatoryBody: string; status: 'active' | 'inactive';
+}
+export interface DemoData {
+  version: 1;
+  transactions: Transaction[]; accounts: AccountRecord[]; positions: Position[];
+  branches: Branch[]; reps: Rep[]; appUsers: AppUserRecord[];
+  registrations: PendingRegistration[]; firmInfo: FirmInfo;
+}

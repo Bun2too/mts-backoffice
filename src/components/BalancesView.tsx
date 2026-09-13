@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { User, Balance, UserLevel } from '../types';
-import { canEditData } from '../types';
-import { scopedBalances, scopedAccounts, MOCK_BRANCHES } from '../data/mockData';
-import { fmt, PnlCell, TH, TD, SectionHeader, GroupBySelect, Toast, ReadOnlyBanner } from './shared';
+import { useScopedData } from '../context/DataContext';
+import { fmt, PnlCell, TH, TD, SectionHeader, GroupBySelect } from './shared';
 
 type GroupBy = 'none' | 'branch';
 
@@ -13,53 +12,13 @@ const GROUP_OPTIONS: Record<UserLevel, { value: GroupBy; label: string }[]> = {
   account: [{ value: 'none', label: 'All Flat' }],
 };
 
-interface EditModalProps { bal: Balance; onClose: () => void; onSave: (b: Balance) => void; }
-
-function EditModal({ bal, onClose, onSave }: EditModalProps) {
-  const [draft, setDraft] = useState({ ...bal });
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, width: '100%', maxWidth: 540 }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '13px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', fontFamily: 'var(--font-jetbrains)', marginBottom: 2 }}>{bal.accountId}</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{bal.accountName}</div>
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-foreground)', fontSize: '1.1rem', cursor: 'pointer' }}>✕</button>
-        </div>
-        <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          {([
-            { key: 'cashBalance',        label: 'Cash Balance' },
-            { key: 'marginBalance',       label: 'Margin Balance' },
-            { key: 'buyingPower',         label: 'Buying Power' },
-            { key: 'marginAvailable',     label: 'Margin Available' },
-            { key: 'pendingDeposits',     label: 'Pending Deposits' },
-            { key: 'pendingWithdrawals',  label: 'Pending Withdrawals' },
-          ] as { key: keyof Balance; label: string }[]).map(f => (
-            <div key={f.key}>
-              <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 600, color: 'var(--muted-foreground)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>{f.label}</label>
-              <input type="number" step="0.01" value={draft[f.key] as number} onChange={e => setDraft(d => ({ ...d, [f.key]: Number(e.target.value) }))} />
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={() => onSave(draft)}>Save Balance</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface Props { user: User }
 
 export default function BalancesView({ user }: Props) {
-  const [balances, setBalances] = useState<Balance[]>(scopedBalances(user));
+  const { scopedBalances, scopedAccounts, branches: MOCK_BRANCHES } = useScopedData();
+  const balances = scopedBalances(user);
   const [groupBy, setGroupBy] = useState<GroupBy>(GROUP_OPTIONS[user.level][0].value);
   const [filterBranch, setFilterBranch] = useState('all');
-  const [selected, setSelected] = useState<Balance | null>(null);
-  const [toast, setToast] = useState('');
-  const editable = canEditData(user.level);
 
   const filtered = balances.filter(b => filterBranch === 'all' || b.branchId === filterBranch);
 
@@ -68,12 +27,6 @@ export default function BalancesView({ user }: Props) {
   const totalEquity = filtered.reduce((s, b) => s + b.totalEquity, 0);
   const totalDayPnl = filtered.reduce((s, b) => s + b.dayPnl, 0);
 
-  const handleSave = (updated: Balance) => {
-    setBalances(bs => bs.map(b => b.accountId === updated.accountId ? updated : b));
-    setSelected(null);
-    setToast(`Balance for ${updated.accountName} updated.`);
-    setTimeout(() => setToast(''), 3000);
-  };
 
   const branches = MOCK_BRANCHES.filter(b => balances.some(bal => bal.branchId === b.id));
 
@@ -90,7 +43,7 @@ export default function BalancesView({ user }: Props) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '16px 24px 0', flexShrink: 0 }}>
         <SectionHeader title="Balances" sub={`${filtered.length} accounts`} />
-        {!editable && <ReadOnlyBanner />}
+        <p className="demo-note">Calculated from demo transactions. Firm and branch users can make adjustments in Transactions.</p>
 
         {/* Aggregate tiles */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -146,14 +99,12 @@ export default function BalancesView({ user }: Props) {
                     <TH right>Pending Dep.</TH>
                     <TH right>Pending W/D</TH>
                     <TH right>Day P&L</TH>
-                    {editable && <TH></TH>}
                   </tr>
                 </thead>
               )}
               <tbody>
                 {group.rows.map(b => (
-                  <tr key={b.accountId} className="table-row-hover" style={{ borderBottom: '1px solid rgba(30,45,74,0.4)' }}
-                    onClick={() => editable && setSelected(b)}>
+                  <tr key={b.accountId} className="table-row-hover" style={{ borderBottom: '1px solid rgba(30,45,74,0.4)' }}>
                     <TD>
                       <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--foreground)' }}>{b.accountName}</div>
                       <div style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.58rem', color: 'var(--muted-foreground)' }}>{b.accountId}</div>
@@ -169,11 +120,6 @@ export default function BalancesView({ user }: Props) {
                     <TD right><span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.72rem', color: 'var(--gain)' }}>{fmt(b.pendingDeposits)}</span></TD>
                     <TD right><span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.72rem', color: 'var(--loss)' }}>{fmt(b.pendingWithdrawals)}</span></TD>
                     <TD right><PnlCell value={b.dayPnl} pct={b.dayPnlPct} /></TD>
-                    {editable && (
-                      <TD>
-                        <button onClick={e => { e.stopPropagation(); setSelected(b); }} className="btn-secondary" style={{ padding: '3px 10px', fontSize: '0.65rem' }}>Edit</button>
-                      </TD>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -181,9 +127,6 @@ export default function BalancesView({ user }: Props) {
           </div>
         ))}
       </div>
-
-      {selected && editable && <EditModal bal={selected} onClose={() => setSelected(null)} onSave={handleSave} />}
-      <Toast message={toast} />
     </div>
   );
 }

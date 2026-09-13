@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Branch } from '../types';
-import { MOCK_BRANCHES } from '../data/mockData';
+import { useScopedData } from '../context/DataContext';
 import { StatusBadge, TH, TD, SectionHeader, Toast } from './shared';
 
 const EMPTY_BRANCH: Omit<Branch, 'id' | 'createdAt'> = {
@@ -84,20 +84,20 @@ function BranchModal({ branch, isNew, onClose, onSave, onDelete }: ModalProps) {
 }
 
 export default function BranchManagementView() {
-  const [branches, setBranches] = useState<Branch[]>(MOCK_BRANCHES);
+  const { branches, updateBranch, deleteBranch } = useScopedData();
   const [modal, setModal] = useState<{ branch: Branch | null; isNew: boolean } | null>(null);
   const [toast, setToast] = useState('');
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const handleSave = (b: Branch) => {
-    setBranches(bs => bs.some(x => x.id === b.id) ? bs.map(x => x.id === b.id ? b : x) : [...bs, b]);
+    try { updateBranch(b); } catch (e) { showToast((e as Error).message); return; }
     setModal(null);
     showToast(modal?.isNew ? `Branch ${b.name} created.` : `Branch ${b.name} updated.`);
   };
 
   const handleDelete = (id: string) => {
-    setBranches(bs => bs.filter(b => b.id !== id));
+    try { deleteBranch(id); } catch (e) { showToast((e as Error).message); return; }
     setModal(null);
     showToast('Branch deleted.');
   };

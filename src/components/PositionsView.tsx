@@ -1,78 +1,7 @@
 import { useState } from 'react';
 import type { User, Position, UserLevel } from '../types';
-import { canEditData } from '../types';
-import { scopedPositions, scopedAccounts, MOCK_BRANCHES } from '../data/mockData';
-import { fmt, fmtPct, StatusBadge, TH, TD, SectionHeader, GroupBySelect, Toast, ReadOnlyBanner, PnlCell } from './shared';
-
-interface EditModalProps {
-  pos: Position;
-  onClose: () => void;
-  onSave: (p: Position) => void;
-}
-
-function EditModal({ pos, onClose, onSave }: EditModalProps) {
-  const [draft, setDraft] = useState({ ...pos });
-  const marketValue = draft.quantity * draft.currentPrice;
-  const unrealizedPnl = (draft.currentPrice - draft.avgCost) * draft.quantity;
-  const unrealizedPnlPct = draft.avgCost > 0 ? ((draft.currentPrice - draft.avgCost) / draft.avgCost) * 100 : 0;
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, width: '100%', maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '13px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '1rem', fontWeight: 700, color: 'var(--foreground)' }}>{pos.symbol}</span>
-            <span style={{ marginLeft: 10, fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>{pos.description}</span>
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-foreground)', fontSize: '1.1rem', cursor: 'pointer' }}>✕</button>
-        </div>
-        <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          {[
-            { label: 'Account', value: draft.accountName, readOnly: true },
-            { label: 'Asset Class', value: draft.assetClass, readOnly: true },
-          ].map(f => (
-            <div key={f.label}>
-              <Label>{f.label}</Label>
-              <input value={f.value} disabled style={{ marginTop: 6, opacity: 0.5 }} />
-            </div>
-          ))}
-          <div>
-            <Label>Quantity</Label>
-            <input type="number" value={draft.quantity} onChange={e => setDraft(d => ({ ...d, quantity: Number(e.target.value) }))} style={{ marginTop: 6 }} />
-          </div>
-          <div>
-            <Label>Avg Cost</Label>
-            <input type="number" step="0.01" value={draft.avgCost} onChange={e => setDraft(d => ({ ...d, avgCost: Number(e.target.value) }))} style={{ marginTop: 6 }} />
-          </div>
-          <div>
-            <Label>Current Price</Label>
-            <input type="number" step="0.01" value={draft.currentPrice} onChange={e => setDraft(d => ({ ...d, currentPrice: Number(e.target.value) }))} style={{ marginTop: 6 }} />
-          </div>
-          <div>
-            <Label>Market Value (calculated)</Label>
-            <input value={fmt(marketValue)} disabled style={{ marginTop: 6, opacity: 0.5, fontFamily: 'var(--font-jetbrains)' }} />
-          </div>
-          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 14 }}>
-            <div style={{ flex: 1 }}>
-              <Label>Unrealized P&amp;L</Label>
-              <div style={{ marginTop: 8, fontFamily: 'var(--font-jetbrains)', fontSize: '0.85rem', fontWeight: 600, color: unrealizedPnl >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
-                {unrealizedPnl >= 0 ? '+' : ''}{fmt(unrealizedPnl)} ({fmtPct(unrealizedPnlPct)})
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={() => onSave({ ...draft, marketValue, unrealizedPnl, unrealizedPnlPct })}>Save Position</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 600, color: 'var(--muted-foreground)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{children}</label>;
-}
+import { useScopedData } from '../context/DataContext';
+import { fmt, fmtPct, StatusBadge, TH, TD, SectionHeader, GroupBySelect, PnlCell } from './shared';
 
 type GroupBy = 'none' | 'branch' | 'account';
 
@@ -86,14 +15,12 @@ const GROUP_OPTIONS: Record<UserLevel, { value: GroupBy; label: string }[]> = {
 interface Props { user: User }
 
 export default function PositionsView({ user }: Props) {
-  const [positions, setPositions] = useState<Position[]>(scopedPositions(user));
+  const { scopedPositions, scopedAccounts, branches: MOCK_BRANCHES } = useScopedData();
+  const positions = scopedPositions(user);
   const [groupBy, setGroupBy] = useState<GroupBy>(GROUP_OPTIONS[user.level][0].value);
   const [filterAccount, setFilterAccount] = useState('all');
   const [filterBranch, setFilterBranch] = useState('all');
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Position | null>(null);
-  const [toast, setToast] = useState('');
-  const editable = canEditData(user.level);
 
   const accounts = scopedAccounts(user);
   const branches = user.level === 'firm' ? MOCK_BRANCHES : [];
@@ -111,12 +38,6 @@ export default function PositionsView({ user }: Props) {
   const totalMV = filtered.reduce((s, p) => s + p.marketValue, 0);
   const totalPnl = filtered.reduce((s, p) => s + p.unrealizedPnl, 0);
 
-  const handleSave = (updated: Position) => {
-    setPositions(ps => ps.map(p => p.id === updated.id ? updated : p));
-    setSelected(null);
-    setToast(`${updated.symbol} position updated.`);
-    setTimeout(() => setToast(''), 3000);
-  };
 
   // Group the rows
   const groups: { key: string; label: string; sub?: string; rows: Position[] }[] = [];
@@ -142,7 +63,7 @@ export default function PositionsView({ user }: Props) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '16px 24px 0', flexShrink: 0 }}>
         <SectionHeader title="Positions" sub={`${filtered.length} holdings · MV ${fmt(totalMV)}`} />
-        {!editable && <ReadOnlyBanner />}
+        <p className="demo-note">Calculated from demo transactions. Firm and branch users can make adjustments in Transactions.</p>
 
         {/* Summary tiles */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -205,14 +126,12 @@ export default function PositionsView({ user }: Props) {
                     <TH right>Unrealized P&L</TH>
                     <TH right>Day Chg</TH>
                     <TH>Class</TH>
-                    {editable && <TH></TH>}
                   </tr>
                 </thead>
               )}
               <tbody>
                 {group.rows.map(p => (
-                  <tr key={p.id} className="table-row-hover" style={{ borderBottom: '1px solid rgba(30,45,74,0.4)' }}
-                    onClick={() => editable && setSelected(p)}>
+                  <tr key={p.id} className="table-row-hover" style={{ borderBottom: '1px solid rgba(30,45,74,0.4)' }}>
                     <TD><span style={{ fontFamily: 'var(--font-jetbrains)', fontWeight: 700, fontSize: '0.78rem', color: 'var(--accent)' }}>{p.symbol}</span></TD>
                     <TD><span style={{ fontSize: '0.73rem', color: 'var(--foreground)' }}>{p.description}</span></TD>
                     {user.level !== 'account' && (
@@ -228,11 +147,6 @@ export default function PositionsView({ user }: Props) {
                     <TD right><PnlCell value={p.unrealizedPnl} pct={p.unrealizedPnlPct} /></TD>
                     <TD right><PnlCell value={p.dayChange} pct={p.dayChangePct} /></TD>
                     <TD><span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>{p.assetClass.replace('_', ' ')}</span></TD>
-                    {editable && (
-                      <TD>
-                        <button onClick={e => { e.stopPropagation(); setSelected(p); }} className="btn-secondary" style={{ padding: '3px 10px', fontSize: '0.65rem' }}>Edit</button>
-                      </TD>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -243,9 +157,6 @@ export default function PositionsView({ user }: Props) {
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '0.78rem' }}>No positions match the current filters.</div>
         )}
       </div>
-
-      {selected && editable && <EditModal pos={selected} onClose={() => setSelected(null)} onSave={handleSave} />}
-      <Toast message={toast} />
     </div>
   );
 }

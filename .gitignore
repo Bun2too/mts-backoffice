@@ -19,3 +19,8 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Generated demo packages and browser test artifacts
+release/
+playwright-report/
+test-results/

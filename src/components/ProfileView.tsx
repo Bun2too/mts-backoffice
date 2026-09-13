@@ -1,3 +1,4 @@
+import { useData } from '../context/DataContext';
 import { useState } from 'react';
 import type { User, UserLevel } from '../types';
 
@@ -21,6 +22,7 @@ const LEVEL_COLOR: Record<UserLevel, string> = {
 };
 
 export default function ProfileView({ user, onUpdate }: Props) {
+  const { changePassword } = useData();
   const [draft, setDraft] = useState({ ...user });
   const [editing, setEditing] = useState(false);
   const [pwSection, setPwSection] = useState(false);
@@ -33,7 +35,7 @@ export default function ProfileView({ user, onUpdate }: Props) {
   };
 
   const handleSave = () => {
-    onUpdate(draft);
+    try { onUpdate(draft); } catch (e) { showToast((e as Error).message); return; }
     setEditing(false);
     showToast('Profile updated successfully.');
   };
@@ -47,6 +49,7 @@ export default function ProfileView({ user, onUpdate }: Props) {
     if (!pw.current) { showToast('Enter your current password.'); return; }
     if (pw.next.length < 8) { showToast('New password must be at least 8 characters.'); return; }
     if (pw.next !== pw.confirm) { showToast('Passwords do not match.'); return; }
+    try { changePassword(pw.current, pw.next); } catch (e) { showToast((e as Error).message); return; }
     setPw({ current: '', next: '', confirm: '' });
     setPwSection(false);
     showToast('Password changed successfully.');

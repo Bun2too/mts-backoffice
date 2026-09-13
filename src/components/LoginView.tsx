@@ -1,9 +1,11 @@
+import FirmLogo from './FirmLogo';
 import { useState, useEffect, useRef } from 'react';
 import type { UserLevel, User } from '../types';
-import { MOCK_USERS } from '../data/mockData';
+import { useData } from '../context/DataContext';
 
 interface Props {
-  onLogin: (user: User) => void;
+  onRegister: () => void;
+  onLogin: () => void;
 }
 
 type Step = 'role' | 'identity' | 'verify' | 'credential';
@@ -35,11 +37,11 @@ function ProgressBar({ step }: { step: Step }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <div style={{
                 width: 24, height: 24, borderRadius: '50%',
-                border: `1px solid ${done ? '#10b981' : current ? '#2563eb' : '#1e2d4a'}`,
+                border: `1px solid ${done ? '#10b981' : current ? '#2563eb' : 'var(--border)'}`,
                 background: done ? '#10b981' : current ? 'rgba(37,99,235,0.15)' : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '0.6rem', fontFamily: 'var(--font-jetbrains)',
-                color: done ? '#fff' : current ? '#60a5fa' : '#475569',
+                color: done ? '#fff' : current ? '#60a5fa' : 'var(--muted-foreground)',
                 transition: 'all 0.3s',
                 flexShrink: 0,
               }}>
@@ -50,7 +52,7 @@ function ProgressBar({ step }: { step: Step }) {
               </span>
             </div>
             {i < STEP_LABELS.length - 1 && (
-              <div style={{ flex: 1, height: 1, background: done ? '#10b981' : '#1e2d4a', margin: '0 6px', marginBottom: 16, transition: 'background 0.4s' }} />
+              <div style={{ flex: 1, height: 1, background: done ? '#10b981' : 'var(--border)', margin: '0 6px', marginBottom: 16, transition: 'background 0.4s' }} />
             )}
           </div>
         );
@@ -123,7 +125,7 @@ function IdentityStep({
       </div>
       <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', color: 'var(--foreground)' }}>Enter your email</h2>
       <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', margin: '0 0 20px' }}>
-        We'll look up your account and send a verification code.
+        We'll look up your demo account. Verification is simulated.
       </p>
 
       <div style={{ marginBottom: 14 }}>
@@ -200,9 +202,9 @@ function VerifyStep({
     <div>
       <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', color: 'var(--foreground)' }}>Verify your identity</h2>
       <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', margin: '0 0 4px' }}>
-        A 6-digit code was sent to <span style={{ color: 'var(--foreground)', fontFamily: 'var(--font-jetbrains)' }}>{masked}</span>
+        Demo verification for <span style={{ color: 'var(--foreground)', fontFamily: 'var(--font-jetbrains)' }}>{masked}</span>
       </p>
-      <p style={{ fontSize: '0.68rem', color: 'var(--muted-foreground)', margin: '0 0 24px' }}>Enter the code to continue, or skip for demo purposes.</p>
+      <p style={{ fontSize: '0.68rem', color: 'var(--muted-foreground)', margin: '0 0 24px' }}>No email is sent. Enter any six digits or use Skip for Demo.</p>
 
       {/* OTP inputs */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 20 }}>
@@ -379,7 +381,8 @@ function HintBox({ children }: { children: React.ReactNode }) {
 }
 
 /* ── Main LoginView ──────────────────────────────────────────────── */
-export default function LoginView({ onLogin }: Props) {
+export default function LoginView({ onLogin, onRegister }: Props) {
+  const { appUsers, signIn, firmInfo } = useData();
   const [step, setStep]   = useState<Step>('role');
   const [role, setRole]   = useState<UserLevel | null>(null);
   const [email, setEmail] = useState('');
@@ -399,9 +402,10 @@ export default function LoginView({ onLogin }: Props) {
     // Simulate account lookup
     setTimeout(() => {
       setLoading(false);
-      const record = MOCK_USERS[email.toLowerCase().trim()];
+      const record = appUsers.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
       if (!record) { setError('No account found for this email address.'); return; }
-      if (record.user.level !== role) { setError(`This account is registered as a ${record.user.level}-level user, not ${role}.`); return; }
+      if (record.level !== role) { setError(`This account is registered as a ${record.level}-level user, not ${role}.`); return; }
+      if (record.status !== 'active') { setError('This user is pending approval or suspended.'); return; }
       setStep('verify');
     }, 700);
   };
@@ -412,13 +416,12 @@ export default function LoginView({ onLogin }: Props) {
     setError('');
     setLoading(true);
     setTimeout(() => {
-      const record = MOCK_USERS[email.toLowerCase().trim()];
-      if (!record || record.password !== pw) {
-        setError('Incorrect password. Please try again.');
-        setLoading(false);
-        return;
-      }
-      onLogin(record.user);
+      const record = appUsers.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
+      try {
+        signIn(email, pw, role!);
+        onLogin();
+      } catch (e) { setError((e as Error).message); }
+      setLoading(false);
     }, 600);
   };
 
@@ -434,11 +437,9 @@ export default function LoginView({ onLogin }: Props) {
       {/* Top bar */}
       <div style={{ background: 'var(--panel)', borderBottom: '1px solid var(--border)', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 2 }}>
-            {[0,1,2].map(i => <div key={i} style={{ width: 4, height: 4 + i * 3, background: 'var(--primary)', borderRadius: 1 }} />)}
-          </div>
+          <FirmLogo size={24} />
           <span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.65rem', color: 'var(--muted-foreground)', letterSpacing: '0.12em' }}>
-            ACE CAPITAL GROUP — BACK OFFICE SYSTEM v4.2.1
+            {firmInfo.name.toUpperCase()} — BACK OFFICE DEMO
           </span>
         </div>
         <span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.6rem', color: 'var(--muted-foreground)' }}>
@@ -451,11 +452,9 @@ export default function LoginView({ onLogin }: Props) {
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 2 }}>
-              <div style={{ display: 'flex', gap: 3 }}>
-                {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6 + i * 4, background: 'var(--primary)', borderRadius: 1 }} />)}
-              </div>
+              <FirmLogo size={36} />
               <span style={{ fontFamily: 'var(--font-jetbrains)', fontWeight: 600, fontSize: '1.05rem', color: 'var(--foreground)', letterSpacing: '0.05em' }}>
-                ACE CAPITAL
+                {firmInfo.name.toUpperCase()}
               </span>
             </div>
             <p style={{ fontSize: '0.62rem', color: 'var(--muted-foreground)', letterSpacing: '0.18em', fontFamily: 'var(--font-jetbrains)', margin: 0 }}>
@@ -466,6 +465,7 @@ export default function LoginView({ onLogin }: Props) {
           {/* Card */}
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, padding: '24px' }}>
             <ProgressBar step={step} />
+            {step === 'role' && <button className="btn-secondary" style={{ width: '100%', marginBottom: 18 }} onClick={onRegister}>Request access / Register</button>}
 
             {step === 'role' && (
               <RoleStep onSelect={handleRoleSelect} />

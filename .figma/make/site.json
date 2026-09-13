@@ -1,0 +1,11 @@
+{
+  "title": "MTS Backoffice Mockup",
+  "description": "Streamline stock trading management with a user-friendly interface for firms, branches, and representatives to authenticate, edit trades, and manage profiles.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

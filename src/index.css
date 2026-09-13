@@ -169,3 +169,41 @@ button {
   font-size: 0.8125rem;
 }
 .btn-warn:hover { background: rgba(245,158,11,0.2); }
+
+:root { color-scheme: dark; }
+:root[data-theme='light'] {
+  color-scheme: light;
+  --background: #f3f6fb; --foreground: #17253b;
+  --card: #ffffff; --card-foreground: #17253b; --panel: #eef2f8;
+  --secondary: #e1e8f2; --secondary-foreground: #475569;
+  --muted: #e8eef7; --muted-foreground: #52627b;
+  --border: #cbd5e1; --accent: #0369a1;
+  --gain: #047857; --loss: #b91c1c; --warn: #92400e; --info: #0369a1;
+}
+input, select, textarea { background: var(--panel); color: var(--foreground); border-color: var(--border); }
+input::placeholder { color: var(--muted-foreground); }
+select option { background: var(--card); }
+.btn-secondary { color: var(--muted-foreground); border-color: var(--border); }
+.btn-secondary:hover { color: var(--foreground); }
+.btn-danger { color: var(--loss); }
+.btn-warn { color: var(--warn); }
+.badge-green { color: var(--gain); }
+.badge-red { color: var(--loss); }
+.badge-amber { color: var(--warn); }
+.badge-blue { color: var(--accent); }
+.badge-gray { color: var(--muted-foreground); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.demo-note { color: var(--muted-foreground); font-size: .75rem; line-height: 1.6; margin: 10px 0 16px; }
+.demo-alert, .form-error { color: var(--loss); background: var(--card); padding: 10px 14px; font-size: .8rem; }
+.view-heading, .modal-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 100; background: #0009; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.demo-modal { width: 100%; max-width: 650px; max-height: 90vh; overflow-y: auto; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; }
+.modal-heading h2 { font-size: 1rem; font-weight: 600; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; border: 0; padding: 0; margin: 14px 0; }
+.form-grid label { display: flex; flex-direction: column; gap: 6px; color: var(--muted-foreground); font-size: .75rem; }
+.full-width { grid-column: 1 / -1; }
+.modal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.calculation-preview { display: flex; justify-content: space-between; background: var(--muted); padding: 12px; font-size: .8rem; }
+.approval-card { padding: 18px; border-bottom: 1px solid var(--border); font-size: .8rem; }
+@media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } .modal-backdrop { padding: 12px; } }

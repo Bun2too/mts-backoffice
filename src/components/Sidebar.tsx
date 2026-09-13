@@ -1,3 +1,5 @@
+import FirmLogo from './FirmLogo';
+import ThemeToggle from './ThemeToggle';
 import type { User, AppView, UserLevel } from '../types';
 
 const LEVEL_COLOR: Record<UserLevel, string> = {
@@ -15,6 +17,9 @@ const NAV_BY_LEVEL: Record<UserLevel, NavItem[]> = {
     { id: 'transactions', label: 'Transactions', icon: '⇄' },
     { id: 'positions',    label: 'Positions',    icon: '◈' },
     { id: 'balances',     label: 'Balances',     icon: '⊞' },
+    { id: 'users', label: 'Users & Approvals', icon: '♙' },
+    { id: 'reps', label: 'Representatives', icon: '♧' },
+    { id: 'firm-settings', label: 'Firm Settings', icon: '⚙' },
     { id: 'branches',     label: 'Branches',     icon: '⊟' },
     { id: 'accounts',     label: 'Accounts',     icon: '◉' },
     { id: 'profile',      label: 'Profile',      icon: '◎' },
@@ -71,11 +76,9 @@ export default function Sidebar({ user, view, onNav, onLogout }: Props) {
       {/* Brand */}
       <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <div style={{ display: 'flex', gap: 2 }}>
-            {[0,1,2].map(i => <div key={i} style={{ width: 4, height: 4 + i * 3, background: 'var(--primary)', borderRadius: 1 }} />)}
-          </div>
-          <span style={{ fontFamily: 'var(--font-jetbrains)', fontWeight: 600, fontSize: '0.73rem', color: 'var(--foreground)', letterSpacing: '0.06em' }}>
-            ACE CAPITAL
+          <FirmLogo size={24} />
+          <span style={{ fontFamily: 'var(--font-jetbrains)', fontWeight: 600, fontSize: '0.73rem', color: 'var(--foreground)', letterSpacing: '0.06em', overflowWrap: 'anywhere', minWidth: 0 }}>
+            {user.firmName.toUpperCase()}
           </span>
         </div>
         <div style={{ fontSize: '0.58rem', color: 'var(--muted-foreground)', letterSpacing: '0.14em', fontFamily: 'var(--font-jetbrains)' }}>
@@ -154,7 +157,7 @@ export default function Sidebar({ user, view, onNav, onLogout }: Props) {
             {item.label}
             {/* Read-only badge for account role */}
             {user.level === 'account' && (item.id === 'transactions' || item.id === 'positions' || item.id === 'balances') && (
-              <span style={{ marginLeft: 'auto', fontSize: '0.52rem', color: '#475569', fontFamily: 'var(--font-jetbrains)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              <span style={{ marginLeft: 'auto', fontSize: '0.52rem', color: 'var(--muted-foreground)', fontFamily: 'var(--font-jetbrains)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 View
               </span>
             )}
@@ -162,12 +165,13 @@ export default function Sidebar({ user, view, onNav, onLogout }: Props) {
         ))}
       </nav>
 
+      <ThemeToggle />
       {/* Market status + logout */}
       <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--gain)' }} />
           <span style={{ fontSize: '0.58rem', color: 'var(--muted-foreground)', fontFamily: 'var(--font-jetbrains)' }}>
-            NYSE OPEN · 14:32 ET
+            DEMO DATA · BROWSER SAVED
           </span>
         </div>
         <button

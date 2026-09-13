@@ -1,6 +1,6 @@
-import type { User } from '../types';
+import type { User, AccountRecord, Position, Balance } from '../types';
 import { canEditData } from '../types';
-import { scopedTransactions, scopedAccounts, scopedPositions, scopedBalances, MOCK_BRANCHES } from '../data/mockData';
+import { useScopedData } from '../context/DataContext';
 import { fmt, StatusBadge } from './shared';
 
 const STATUS_CLASS: Record<string, string> = {
@@ -10,6 +10,7 @@ const STATUS_CLASS: Record<string, string> = {
 interface Props { user: User }
 
 export default function Dashboard({ user }: Props) {
+  const { scopedTransactions, scopedAccounts, scopedPositions, scopedBalances, branches: MOCK_BRANCHES } = useScopedData();
   const txns   = scopedTransactions(user);
   const accts  = scopedAccounts(user);
   const pos    = scopedPositions(user);
@@ -17,7 +18,7 @@ export default function Dashboard({ user }: Props) {
 
   const totalEquity = bals.reduce((s, b) => s + b.totalEquity, 0);
   const totalCash   = bals.reduce((s, b) => s + b.cashBalance, 0);
-  const totalMV     = pos.reduce((s, p) => s + p.marketValue, 0);
+  const totalMV     = bals.reduce((s, b) => s + b.portfolioValue, 0);
   const totalPnl    = bals.reduce((s, b) => s + b.dayPnl, 0);
 
   const statusCounts = txns.reduce((acc, t) => { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {} as Record<string, number>);
@@ -151,8 +152,8 @@ function ContextLabel({ user }: { user: User }) {
 
 interface StatsInput {
   totalEquity: number; totalCash: number; totalMV: number; totalPnl: number;
-  accts: ReturnType<typeof scopedAccounts>; pos: ReturnType<typeof scopedPositions>;
-  bals: ReturnType<typeof scopedBalances>;
+  accts: AccountRecord[]; pos: Position[];
+  bals: Balance[];
 }
 
 function buildStats(user: User, d: StatsInput) {
