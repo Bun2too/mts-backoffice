@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/model.test.ts",
+    "test": "node --experimental-strip-types --test tests/model.test.ts tests/deployment.test.mjs",
     "test:e2e": "playwright test",
     "package:demo": "pnpm build && node scripts/package-demo.mjs",
     "seed:demo": "node --experimental-strip-types scripts/seed-demo.mjs"

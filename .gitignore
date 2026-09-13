@@ -24,3 +24,6 @@ logs/
 release/
 playwright-report/
 test-results/
+
+# Netlify CLI local state
+.netlify/

@@ -118,9 +118,9 @@ These are the original seed credentials. An imported/custom seed or user edits c
 | --- | --- |
 | `pnpm dev` | Local Vite server, default port 8443 |
 | `pnpm typecheck` | TypeScript validation |
-| `pnpm test` | Calculation, scope, user validation and snapshot tests |
+| `pnpm test` | Calculation, scope, user validation, snapshot and deployment mapping tests |
 | `pnpm exec playwright install chromium` | One-time browser installation |
-| `pnpm test:e2e` | End-to-end browser tests; starts Vite on 127.0.0.1:4173 |
+| `pnpm test:e2e` | End-to-end browser tests; starts Vite on 127.0.0.1:4173 (CI tests a production build; run `pnpm build` first) |
 | `pnpm build` | Type-check and create production `dist/` |
 | `pnpm preview --port 8444` | Preview an existing production build locally |
 | `pnpm package:demo` | Build and generate both deployment folders under `release/` |
@@ -169,13 +169,17 @@ These are ready-to-upload folders, not source-code bundles. Deploy `index.html` 
 3. Open the assigned HTTPS URL and test the original or custom seed credentials.
 4. For updates, rebuild and upload the new `release/netlify/` folder to that same site's deploy area.
 
-**Git-based deployment:**
+**GitHub Actions deployment (develop → qa → main):**
 
-1. Push this repo, including `netlify.toml`, `pnpm-lock.yaml`, `package.json`, source, and `.figma/make/site.json`, to your Git provider.
-2. Import the repository into Netlify and choose the desired branch.
-3. `netlify.toml` supplies build command `pnpm build`, publish directory `dist`, and Node 22.23.2. The `packageManager` field pins pnpm.
-4. No environment variables are required. Leave `FIGMA_PUBLIC_URL` unset.
-5. Deploy and verify login, registration/approval, transactions and theme switching.
+See [CI/CD setup and promotion guide](docs/cicd.md). The repository includes `.github/workflows/netlify.yml`:
+
+- `develop` → `https://develop--mts-backoffice.netlify.app`
+- `qa` → `https://qa--mts-backoffice.netlify.app`
+- `main` → `https://mts-backoffice.netlify.app`, after successful tests and configured GitHub production-environment approval.
+
+Create GitHub environments `dev`, `qa`, and `production`, configure required reviewers for production, and add `NETLIFY_SITE_ID` and `NETLIFY_AUTH_TOKEN` as environment secrets. Stop independent Netlify Git builds so they cannot bypass the GitHub approval gate. The guide has exact setup steps; credentials and reviewer rules cannot be supplied by the workflow YAML alone.
+
+`netlify.toml` now skips Netlify-hosted Git builds intentionally. GitHub builds and tests the site, then uploads that same build via the Netlify CLI. Manual folder uploads remain supported.
 
 The current app navigates using React state at the site root; it does not require an SPA history rewrite rule. If URL-based routing is added later, add the corresponding fallback configuration.
 
