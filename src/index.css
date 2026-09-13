@@ -1,0 +1,171 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+}
+
+:root {
+  --background: #080d1a;
+  --foreground: #e2e8f0;
+  --card: #0f1629;
+  --card-foreground: #e2e8f0;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #1e2d4a;
+  --secondary-foreground: #94a3b8;
+  --muted: #131e35;
+  --muted-foreground: #64748b;
+  --accent: #0ea5e9;
+  --accent-foreground: #ffffff;
+  --border: #1e2d4a;
+  --ring: #2563eb;
+  --radius: 3px;
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-jetbrains: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Semantic finance colors */
+  --gain: #10b981;
+  --loss: #ef4444;
+  --warn: #f59e0b;
+  --info: #0ea5e9;
+  --panel: #0b1120;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: var(--font-inter);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1e2d4a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+
+.font-mono { font-family: var(--font-jetbrains) !important; }
+
+/* Numeric data cells */
+.data-cell {
+  font-family: var(--font-jetbrains);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.gain { color: var(--gain); }
+.loss { color: var(--loss); }
+.warn { color: var(--warn); }
+
+/* Table row hover */
+.table-row-hover:hover { background: rgba(37, 99, 235, 0.06); cursor: pointer; }
+
+/* Status badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-family: var(--font-jetbrains);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge-green  { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+.badge-red    { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+.badge-amber  { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.badge-blue   { background: rgba(14,165,233,0.15); color: #0ea5e9; border: 1px solid rgba(14,165,233,0.3); }
+.badge-gray   { background: rgba(100,116,139,0.15);color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+
+input, select, textarea {
+  background: #0b1120;
+  border: 1px solid #1e2d4a;
+  color: #e2e8f0;
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-family: var(--font-inter);
+  font-size: 0.8125rem;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+}
+input::placeholder { color: #475569; }
+
+select option { background: #0f1629; }
+
+button {
+  font-family: var(--font-inter);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 7px 16px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.btn-primary:hover { background: #1d4ed8; }
+
+.btn-secondary {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #1e2d4a;
+  padding: 6px 14px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+}
+.btn-secondary:hover { border-color: #2563eb; color: #e2e8f0; }
+
+.btn-danger {
+  background: rgba(239,68,68,0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.3);
+  padding: 6px 14px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+}
+.btn-danger:hover { background: rgba(239,68,68,0.2); }
+
+.btn-warn {
+  background: rgba(245,158,11,0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245,158,11,0.3);
+  padding: 6px 14px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+}
+.btn-warn:hover { background: rgba(245,158,11,0.2); }
