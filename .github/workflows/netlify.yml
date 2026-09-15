@@ -1,0 +1,104 @@
+name: CI and Netlify deployment
+
+on:
+  pull_request:
+    branches: [develop, qa, main]
+  push:
+    branches: [develop, qa, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize releases within a branch, including time spent awaiting approval.
+# A stale commit is rejected immediately before deployment.
+concurrency:
+  group: netlify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: 'true'
+
+jobs:
+  verify:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@10.34.3
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        run: pnpm test
+      - name: Build production assets
+        run: pnpm build
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test built app in Chromium
+        run: pnpm test:e2e
+      - name: Record build revision
+        env:
+          BUILD_SHA: ${{ github.sha }}
+          BUILD_BRANCH: ${{ github.ref_name }}
+        run: |
+          node --input-type=module <<'JS'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('dist/deployment.json', JSON.stringify({
+            sha: process.env.BUILD_SHA,
+            branch: process.env.BUILD_BRANCH,
+          }, null, 2) + '\n');
+          JS
+      - name: Upload verified site
+        uses: actions/upload-artifact@v7
+        with:
+          name: netlify-site-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-failures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Netlify
+    needs: verify
+    if: github.event_name != 'pull_request' && contains(fromJSON('["develop","qa","main"]'), github.ref_name)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # REQUIRED: configure required reviewers on production in GitHub Settings.
+    # Merely declaring an environment here does not enable approval protection.
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'develop' && 'dev' || 'qa' }}
+      url: ${{ github.ref_name == 'main' && 'https://mts-backoffice.netlify.app' || github.ref_name == 'develop' && 'https://develop--mts-backoffice.netlify.app' || 'https://qa--mts-backoffice.netlify.app' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - name: Download verified site from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: netlify-site-${{ github.sha }}
+          path: dist/
+      - name: Deploy verified revision and check published URL
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/netlify-deploy.mjs

@@ -13,6 +13,7 @@ await writeFile(
   new URL("release/BUILD.txt", root),
   `Backoffice static demo built ${new Date().toISOString()}\nDeploy netlify/ to Netlify or windows-iis/ to an IIS site root.\n`,
 )
+await cp(new URL('docs/', root), new URL('release/docs/', root), { recursive: true });
 console.log(
   "Created release/netlify and release/windows-iis. Deployment instructions: release/README.md",
 )
