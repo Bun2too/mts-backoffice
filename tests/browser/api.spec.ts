@@ -15,6 +15,9 @@ test("API reads, date queries, account writes, postings and persistence use the 
   page,
 }) => {
   const rows = [account]
+  let pauseRefresh = false
+  let resumeRefresh!: () => void
+  const refreshGate = new Promise<void>((resolve) => { resumeRefresh = resolve })
   const writes: {
     method: string
     body: unknown
@@ -33,6 +36,7 @@ test("API reads, date queries, account writes, postings and persistence use the 
       return route.fulfill({ json: book })
     }
     expect(url.searchParams.get("firmId")).toBe("1")
+    if (pauseRefresh) await refreshGate
     return route.fulfill({
       json: url.pathname === "/api/accounts" ? rows : book,
     })
@@ -77,10 +81,21 @@ test("API reads, date queries, account writes, postings and persistence use the 
       }),
     )
   await page.getByLabel("I reviewed this posting").check()
+  // Keep both refresh requests pending to reproduce the CI status overlap.
+  pauseRefresh = true
   await page
     .getByRole("button", { name: "Submit posting", exact: true })
     .click()
-  await expect(page.getByRole("status")).toContainText("Posting saved")
+  try {
+    await expect(page.getByText("Loading accounts…", { exact: true })).toBeVisible()
+    await expect(page.getByText("Loading account book…", { exact: true })).toBeVisible()
+    await expect(
+      page.getByRole("status").filter({ hasText: "Posting saved" }),
+    ).toBeVisible()
+  } finally {
+    pauseRefresh = false
+    resumeRefresh()
+  }
   expect(writes).toHaveLength(2)
   await page.reload()
   await expect(

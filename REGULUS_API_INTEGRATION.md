@@ -294,7 +294,7 @@ Keep `/api` in the forwarded path: Regulus already expects it. Do not define or 
 The existing frontend normally runs on HTTP port `8443`; Regulus defaults to `8080`. The frontend dev server is already running in the supplied environment; configuration changes may require a restart, not a second competing server. For a new local API instance, the backend documents:
 
 ```sh
-cd /Users/beball/Development/mts/regulus-main
+cd {regulus_api_home}/regulus-main
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
@@ -306,7 +306,7 @@ Vite's proxy does not ship in `dist/` and is not supplied by static `vite previe
 
 ## 10. Backend additions needed for full application coverage
 
-All paths here are relative to `/mts/regulus-main`; these changes are proposed, not already available.
+All paths here are relative to {regulus_api_home}/regulus-main`; these changes are proposed, not already available.
 
 | Area | Files / location | Required implementation |
 | --- | --- | --- |
