@@ -1,3 +1,4 @@
+import ApiApplication from './components/api/ApiApplication';
 import { useState } from 'react';
 import type { AppView } from './types';
 import LoginView from './components/LoginView';
@@ -22,7 +23,10 @@ const MARKETS = [
   { label: 'DOW',     value: '43,118.44',up: false, chg: '-0.12%' },
 ];
 
-export default function App() { return <DataProvider><Application /></DataProvider>; }
+export default function App() {
+  const apiMode = import.meta.env.VITE_DATA_MODE === 'api' || (import.meta.env.DEV && new URLSearchParams(location.search).get('data') === 'api');
+  return apiMode ? <ApiApplication /> : <DataProvider><Application /></DataProvider>;
+}
 
 function Application() {
   const { user, signOut, updateProfile, storageError } = useData();

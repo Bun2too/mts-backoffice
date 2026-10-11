@@ -246,3 +246,49 @@ Vite environment settings: `PORT` overrides 8443; `FIGMA_DEV_SERVER_HOST` overri
 - **New deployment still shows old demo data:** browser data is intentionally retained. Export if needed, then use **Reset demo data** to load the newly packaged seed.
 - **Lost every usable demo credential:** clear only `ace-backoffice-demo-v1` in browser developer tools → Application/Storage → Local Storage, then reload. This discards that browser's saved scenario and loads the packaged seed.
 - **Fonts unavailable offline:** system font fallbacks work; layout may differ slightly.
+
+## Regulus API mode (dev)
+
+API mode is implemented as a separate application in `src/components/api/ApiApplication.tsx`, using
+`src/api/regulus.ts`. It does not mount `DataProvider` or load browser demo business data. The existing
+demo remains available in demo builds. The GitHub `develop` deployment selects API mode; QA/main
+remain demo builds until their own backends are configured.
+
+For local API development, copy `.env.example` to `.env.local` and restart Vite, or run:
+
+```sh
+VITE_DATA_MODE=api pnpm dev
+```
+
+Set `REGULUS_PROXY_TARGET` in ignored `.env.local` for local use; the fallback is localhost:8080. Firm ID is `1`, without authentication. In a running
+local demo development server, `/?data=api` also opens API mode. This query switch is disabled in
+production builds. Vite proxies `/api` in development and preview. Netlify uses the server-only
+`netlify/functions/regulus.mjs` proxy and a deploy-scoped GitHub environment secret.
+Neither the static build nor the deployment artifact contains the upstream address. IIS still needs a separately configured `/api` reverse proxy.
+
+Available: account list/create/rename/delete; account/date selection; engine-reported balance,
+position and activity views; explicit dev cash/trade/stock posting using reviewed vendor JSON.
+The posting editor deliberately requires complete vendor payloads rather than guessing action signs
+and business codes. Use `regulus-main/examples/*-request.json` as starting points and review every
+field before submission. Existing transaction editing/cancel/rebill and application-user management
+remain unavailable because the inspected API does not define those workflows.
+
+Missing books, including the deployed legacy blank-identity response, are displayed as unavailable;
+missing financial metrics are not synthesized. Writes never update local demo balances, and failed
+or uncertain writes are not automatically retried. API access is currently unrestricted by user role;
+this mode is for the specified dev environment. The upstream HTTP connection is not encrypted, even
+though Netlify serves the frontend over HTTPS. Use an authenticated HTTPS API/gateway for production.
+
+Validation commands:
+
+```sh
+pnpm test
+VITE_DATA_MODE=demo pnpm build
+CI=true pnpm test:e2e
+VITE_DATA_MODE=api pnpm build
+CI=true TEST_DATA_MODE=api pnpm test:e2e
+```
+
+Browser tests intercept API requests and do not write to the shared dev database. See
+[CI/CD instructions](docs/cicd.md#regulus-dev-integration-october-2026) for the deployment fix and
+[the integration specification](REGULUS_API_INTEGRATION.md) for remaining backend work.

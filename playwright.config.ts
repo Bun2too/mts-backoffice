@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test"
 export default defineConfig({
   testDir: "./tests/browser",
+  testMatch: process.env.TEST_DATA_MODE === "api" ? "api.spec.ts" : "demo.spec.ts",
   fullyParallel: false,
   workers: 1,
   use: {

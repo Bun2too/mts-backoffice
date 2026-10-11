@@ -38,12 +38,31 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Unit tests
         run: pnpm test
-      - name: Build production assets
+      - name: Build demo for regression tests
         run: pnpm build
+        env:
+          VITE_DATA_MODE: demo
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Test built app in Chromium
         run: pnpm test:e2e
+      - name: Preserve tested demo artifact
+        run: mv dist "$RUNNER_TEMP/demo-site"
+      - name: Build API mode for integration tests
+        run: pnpm build
+        env:
+          VITE_DATA_MODE: api
+          VITE_API_BASE_URL: /api
+          VITE_REGULUS_FIRM_ID: '1'
+      - name: Test API mode in Chromium
+        run: pnpm test:e2e
+        env:
+          TEST_DATA_MODE: api
+      - name: Restore tested demo artifact for QA and production
+        if: github.ref_name != 'develop' && github.base_ref != 'develop'
+        run: |
+          rm -rf dist
+          mv "$RUNNER_TEMP/demo-site" dist
       - name: Record build revision
         env:
           BUILD_SHA: ${{ github.sha }}
@@ -60,7 +79,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: netlify-site-${{ github.sha }}
-          path: dist/
+          path: |
+            dist/
+            netlify/functions/
           if-no-files-found: error
           retention-days: 14
       - name: Upload browser failure evidence
@@ -95,10 +116,11 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: netlify-site-${{ github.sha }}
-          path: dist/
+          path: .
       - name: Deploy verified revision and check published URL
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           GITHUB_TOKEN: ${{ github.token }}
+          REGULUS_PROXY_TARGET: ${{ secrets.REGULUS_PROXY_TARGET }}
         run: node scripts/netlify-deploy.mjs
