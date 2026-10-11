@@ -27,3 +27,5 @@ test-results/
 
 # Netlify CLI local state
 .netlify/
+
+!.env.example

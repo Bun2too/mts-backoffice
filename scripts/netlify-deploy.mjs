@@ -1,14 +1,15 @@
 import { readFile, appendFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { proxyOrigin } from '../netlify/functions/regulus.mjs';
 
 export const NETLIFY_CLI_VERSION = '27.5.2';
 const SITE = 'mts-backoffice';
 export function deploymentTarget(ref) {
   const targets = {
-    'refs/heads/develop': { environment: 'dev', branch: 'develop', url: `https://develop--${SITE}.netlify.app`, flags: ['--alias=develop', '--context=branch:develop'] },
-    'refs/heads/qa': { environment: 'qa', branch: 'qa', url: `https://qa--${SITE}.netlify.app`, flags: ['--alias=qa', '--context=branch:qa'] },
-    'refs/heads/main': { environment: 'production', branch: 'main', url: `https://${SITE}.netlify.app`, flags: ['--prod', '--context=production'] },
+    'refs/heads/develop': { environment: 'dev', branch: 'develop', url: `https://develop--${SITE}.netlify.app`, flags: ['--alias=develop'] },
+    'refs/heads/qa': { environment: 'qa', branch: 'qa', url: `https://qa--${SITE}.netlify.app`, flags: ['--alias=qa'] },
+    'refs/heads/main': { environment: 'production', branch: 'main', url: `https://${SITE}.netlify.app`, flags: ['--prod'] },
   };
   const target = Object.hasOwn(targets, ref) ? targets[ref] : undefined;
   if (!target) throw new Error('Deployment requires the develop, qa or main branch.');
@@ -19,6 +20,13 @@ export function validateArtifact(manifest, sha, branch) {
   if (!sha || manifest.sha !== sha || manifest.branch !== branch) {
     throw new Error('The downloaded build does not match this workflow revision.');
   }
+}
+
+export function proxyDeploymentSecret(branch, value) {
+  // Demo deployments must not inherit a site-wide target from another environment.
+  if (branch !== 'develop') return 'DISABLED';
+  if (!value) throw new Error('Missing REGULUS_PROXY_TARGET. Add it to the GitHub dev environment secrets.');
+  return proxyOrigin(value);
 }
 
 async function deploy() {
@@ -42,15 +50,26 @@ async function deploy() {
   if (!site.ok) throw new Error(`Unable to access the configured Netlify site (${site.status}).`);
   if ((await site.json()).name !== SITE) throw new Error(`NETLIFY_SITE_ID must identify ${SITE}. Deployment stopped.`);
 
+  const proxyTarget = proxyDeploymentSecret(target.branch, process.env.REGULUS_PROXY_TARGET);
+
   // Never rebuild here: deploy exactly the artifact that passed verification.
-  // Secrets are passed through the environment, never command arguments.
+  // Deploy-scoped secret values go only to Netlify function runtime, not the static artifact.
+  // Use an argument array (no shell interpolation); capture and redact CLI output.
   const result = spawnSync('npx', [
     '--yes', `--package=netlify-cli@${NETLIFY_CLI_VERSION}`, 'netlify', 'deploy',
-    '--no-build', '--dir=dist', '--timeout=300',
+    '--no-build', '--dir=dist', '--functions=netlify/functions', '--timeout=300',
+    '--secret-env', `REGULUS_PROXY_TARGET=${proxyTarget}`,
     `--message=${target.environment} ${process.env.GITHUB_SHA}`,
     ...target.flags,
-  ], { stdio: 'inherit', env: process.env });
-  if (result.error) throw result.error;
+  ], { encoding: 'utf8', env: process.env, maxBuffer: 10 * 1024 * 1024 });
+  let output = (result.stdout || '') + (result.stderr || '');
+  if (proxyTarget !== 'DISABLED') {
+    for (const value of [process.env.REGULUS_PROXY_TARGET, proxyTarget, new URL(proxyTarget).host, new URL(proxyTarget).hostname]) {
+      if (value) output = output.split(value).join('[redacted upstream]');
+    }
+  }
+  process.stdout.write(output);
+  if (result.error) throw new Error('Unable to run Netlify deploy. No command arguments were logged.');
   if (result.status !== 0) throw new Error(`Netlify deployment failed (${result.status}).`);
 
   // Check the stable environment URL, not merely the CLI exit status.

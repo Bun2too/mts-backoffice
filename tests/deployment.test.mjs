@@ -29,3 +29,9 @@ test('deployment rejects an artifact from another commit or branch', () => {
   assert.throws(() => validateArtifact(manifest, 'other', 'main'));
   assert.throws(() => validateArtifact(manifest, 'abc123', 'qa'));
 });
+
+test('prebuilt deployments do not pass the build-only context flag', () => {
+  for (const branch of ['develop', 'qa', 'main']) {
+    assert.ok(deploymentTarget(`refs/heads/${branch}`).flags.every(flag => !flag.startsWith('--context')));
+  }
+});

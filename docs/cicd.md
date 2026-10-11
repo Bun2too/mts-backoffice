@@ -6,9 +6,9 @@ Repository: `Bun2too/mts-backoffice`.
 
 | Merge destination | GitHub environment | Netlify URL | Release gate |
 | --- | --- | --- | --- |
-| `develop` | `dev` | https://develop--mts-backoffice.netlify.app | Successful build and tests |
-| `qa` | `qa` | https://qa--mts-backoffice.netlify.app | Successful build and tests |
-| `main` | `production` | https://mts-backoffice.netlify.app | Successful build/tests, then required environment reviewer approval |
+| `develop` | `dev` | <https://develop--mts-backoffice.netlify.app> | Successful build and tests |
+| `qa` | `qa` | <https://qa--mts-backoffice.netlify.app> | Successful build and tests |
+| `main` | `production` | <https://mts-backoffice.netlify.app> | Successful build/tests, then required environment reviewer approval |
 
 The aliases are stable **draft deploy aliases on one Netlify project**, not separate Netlify projects or Git-triggered branch deploys. Only `main` uses `--prod`. Development and QA never overwrite the main URL. Browser demo data is isolated by origin; changing environment does not migrate users, transactions, or branding stored in localStorage.
 
@@ -129,3 +129,60 @@ Public aliases become available after their first successful deployment; the YAM
 - [Netlify ignored-build configuration](https://docs.netlify.com/build/configure-builds/ignore-builds/)
 - [GitHub environments and protection rules](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)
 - [Reviewing deployments and plan availability](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments)
+
+## Regulus dev integration (October 2026)
+
+The `develop` build now uses API mode, firm `1`, with browser requests to `/api`.
+The browser calls a Netlify server function at `/api/*`. Its upstream origin is read from
+`REGULUS_PROXY_TARGET` in the function environment; no `_redirects` file contains that address.
+The deployed dev API remains unauthenticated; the proxy does not add user/role authorization.
+QA and production remain demo deployments with their proxy explicitly disabled.
+
+### Configure the private target
+
+1. Open GitHub repository **Settings → Environments → dev → Environment secrets**.
+2. Add `REGULUS_PROXY_TARGET` with the actual upstream origin, including protocol and port,
+   without `/api`, a trailing path, or credentials. Do not use a `VITE_` prefix.
+3. Merge/run the latest `develop` workflow. The deploy job reads this secret after entering
+   the `dev` environment and passes it using Netlify CLI `--secret-env` for that deployment.
+   No manual Netlify variable entry is needed. Missing/invalid values fail deployment.
+4. Verify `/api/accounts?firmId=1` on the dev site. The browser should see only the site origin.
+
+Builds and PR tests do not receive the secret. The uploaded artifact includes `dist/` and
+`netlify/functions/` as separate directories, both without the target value. Only `dist/` is
+published as static content; the function source is packaged by Netlify as server code.
+The target is supplied separately as private deployment configuration, never written into either
+artifact directory. Keep both directories when transferring an API deployment; static folder
+uploads alone cannot install a function or its environment. The demo packaging command remains
+for standalone demo sites; IIS API deployments require their own server-side proxy configuration.
+
+The secret is scoped to the deploy, so draft aliases on the shared Netlify project do not overwrite
+each other's runtime target. QA/main currently pass `DISABLED` instead of inheriting a dev target.
+When enabling API mode for those environments, extend `proxyDeploymentSecret` and configure each
+GitHub environment independently. Re-deploy to apply a secret change; it does not modify older deploys.
+
+For local development, copy `.env.example` to ignored `.env.local` and set the actual origin there.
+Vite reads it only for the local server proxy. Never commit `.env.local`, use `VITE_REGULUS_PROXY_TARGET`,
+or put the value in `netlify.toml`, `public/`, build arguments exposed to the browser, or docs.
+
+The function restricts routes/methods, disables redirects, and strips upstream headers and error
+bodies so backend error pages cannot reveal the address. The public `/api` route names and returned
+business data remain visible by design. This is address confidentiality, not an access-control boundary.
+Netlify administrators and trusted CI runner operators can access deployment configuration.
+Removing a literal from current files does not erase earlier commits, logs, or previously downloaded
+artifacts. If it was published previously, handle those separately; this change does not rewrite history.
+
+References: [deploy-scoped secret environment variables](https://cli.netlify.com/commands/deploy/),
+[function runtime environment](https://docs.netlify.com/build/functions/environment-variables/).
+
+The previous deployment failure (`--context flag is only available when using the --build flag`)
+was in the deploy step, after build/test success. Prebuilt deployments now pass `--alias=develop`,
+`--alias=qa`, or `--prod` without `--context`. The artifact is still uploaded with `--no-build`.
+See the [Netlify deploy CLI reference](https://cli.netlify.com/commands/deploy/) and
+[proxy documentation](https://docs.netlify.com/manage/routing/redirects/rewrites-proxies/).
+
+To release the fix, merge these changes into `develop` and let that new commit's workflow complete.
+Rerunning an old failed workflow uses its old deployment script and will not pick up this fix.
+The workflow deliberately rejects stale revisions; use the latest `develop` workflow, not an older
+successful artifact. Check the stable dev URL and `/deployment.json` after deployment, then verify
+that `/api/accounts?firmId=1` returns JSON from Regulus.
