@@ -103,7 +103,7 @@ jobs:
     # Merely declaring an environment here does not enable approval protection.
     environment:
       name: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'develop' && 'dev' || 'qa' }}
-      url: ${{ github.ref_name == 'main' && 'https://mts-backoffice.netlify.app' || github.ref_name == 'develop' && 'https://develop--mts-backoffice.netlify.app' || 'https://qa--mts-backoffice.netlify.app' }}
+      url: ${{ github.ref_name == 'main' && 'https://mts-backoffice.netlify.app' || github.ref_name == 'develop' && 'https://dev-ci--mts-backoffice.netlify.app' || 'https://qa--mts-backoffice.netlify.app' }}
     steps:
       - uses: actions/checkout@v7
         with:

@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deploymentTarget, validateArtifact } from '../scripts/netlify-deploy.mjs';
+import { deploymentTarget, validateArtifact, parseDeployResult, probeRevision } from '../scripts/netlify-deploy.mjs';
 
 test('develop and qa deploy only to their respective aliases', () => {
   for (const branch of ['develop', 'qa']) {
     const target = deploymentTarget(`refs/heads/${branch}`);
     assert.equal(target.environment, branch === 'develop' ? 'dev' : 'qa');
-    assert.equal(target.url, `https://${branch}--mts-backoffice.netlify.app`);
-    assert.ok(target.flags.includes(`--alias=${branch}`));
+    const alias = branch === "develop" ? "dev-ci" : "qa";
+    assert.equal(target.url, `https://${alias}--mts-backoffice.netlify.app`);
+    assert.ok(target.flags.includes(`--alias=${alias}`));
     assert.ok(!target.flags.includes('--prod'));
   }
 });
@@ -34,4 +35,29 @@ test('prebuilt deployments do not pass the build-only context flag', () => {
   for (const branch of ['develop', 'qa', 'main']) {
     assert.ok(deploymentTarget(`refs/heads/${branch}`).flags.every(flag => !flag.startsWith('--context')));
   }
+});
+
+test('dev CLI alias is distinct from the develop branch', () => {
+  assert.ok(!deploymentTarget('refs/heads/develop').flags.includes('--alias=develop'));
+});
+test('CLI deploy ID identifies the immutable URL, not its potentially broken alias', () => {
+  const id = '6acd15da9d45656c3694af31';
+  assert.equal(parseDeployResult(JSON.stringify({ site_name: 'mts-backoffice', deploy_id: id, deploy_url: 'https://dev-ci--mts-backoffice.netlify.app' })).url, `https://${id}--mts-backoffice.netlify.app`);
+  assert.throws(() => parseDeployResult('not json'), /valid deployment JSON/);
+  assert.throws(() => parseDeployResult(JSON.stringify({ site_name: 'other-site', deploy_id: id })), /unexpected site/);
+});
+test('verification distinguishes broken alias, stale manifest, access page and network failure', async () => {
+  const sha = 'abcdef1234';
+  const url = 'https://dev-ci--mts-backoffice.netlify.app';
+  const check = (response) => probeRevision(url, sha, 'develop', async (_url, init) => {
+    assert.equal(init.redirect, 'manual'); assert.equal(init.cache, 'no-store');
+    return response;
+  });
+  assert.deepEqual(await check(new Response('Missing', { status: 404 })), { ok: false, detail: 'HTTP 404' });
+  assert.equal((await check(new Response(null, { status: 302 }))).detail, 'HTTP 302');
+  assert.match((await check(new Response('<html>Sign in</html>'))).detail, /non-JSON/);
+  assert.match((await check(Response.json({ sha: 'deadbeef', branch: 'develop' }))).detail, /revision mismatch/);
+  assert.equal((await check(Response.json({ sha, branch: 'main' }))).detail, 'branch mismatch');
+  assert.equal((await check(Response.json({ sha, branch: 'develop' }))).ok, true);
+  assert.equal((await probeRevision(url, sha, 'develop', async () => { throw new Error('private diagnostic'); })).detail, 'network/TLS error or request timeout');
 });

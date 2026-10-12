@@ -6,7 +6,7 @@ Repository: `Bun2too/mts-backoffice`.
 
 | Merge destination | GitHub environment | Netlify URL | Release gate |
 | --- | --- | --- | --- |
-| `develop` | `dev` | <https://develop--mts-backoffice.netlify.app> | Successful build and tests |
+| `develop` | `dev` | <https://dev-ci--mts-backoffice.netlify.app> | Successful build and tests |
 | `qa` | `qa` | <https://qa--mts-backoffice.netlify.app> | Successful build and tests |
 | `main` | `production` | <https://mts-backoffice.netlify.app> | Successful build/tests, then required environment reviewer approval |
 
@@ -21,7 +21,7 @@ The repository files do not create account credentials or configure GitHub revie
 Open the existing **mts-backoffice** project in Netlify.
 
 - Under **Project configuration → Build & deploy → Continuous deployment → Build settings**, set build status to **Stopped builds**. This disables Netlify's independent Git builds while still allowing GitHub's CLI uploads.
-- Set the Netlify production branch to `main`, and disable automatic branch deploys and Deploy Previews for this setup. Do not enable a Netlify branch deploy named `develop` or `qa`: those names are used for CLI aliases.
+- Set the Netlify production branch to `main`, and disable automatic branch deploys and Deploy Previews for this setup. Reserve `dev-ci` for CLI dev deployments; do not create a branch deploy with that name. The `qa` alias must also remain separate from Netlify branch deploys.
 - `netlify.toml` also has `ignore = "exit 0"` to skip Git-triggered builds when that configuration is present. Stopping builds in the UI is still required: another branch or an older commit might lack the ignore rule and otherwise publish outside the approval workflow.
 - Do not use Netlify build hooks as a second release path. Limit manual production publishing to authorized operators.
 
@@ -176,7 +176,7 @@ References: [deploy-scoped secret environment variables](https://cli.netlify.com
 [function runtime environment](https://docs.netlify.com/build/functions/environment-variables/).
 
 The previous deployment failure (`--context flag is only available when using the --build flag`)
-was in the deploy step, after build/test success. Prebuilt deployments now pass `--alias=develop`,
+was in the deploy step, after build/test success. Prebuilt deployments now pass `--alias=dev-ci`,
 `--alias=qa`, or `--prod` without `--context`. The artifact is still uploaded with `--no-build`.
 See the [Netlify deploy CLI reference](https://cli.netlify.com/commands/deploy/) and
 [proxy documentation](https://docs.netlify.com/manage/routing/redirects/rewrites-proxies/).
@@ -186,3 +186,22 @@ Rerunning an old failed workflow uses its old deployment script and will not pic
 The workflow deliberately rejects stale revisions; use the latest `develop` workflow, not an older
 successful artifact. Check the stable dev URL and `/deployment.json` after deployment, then verify
 that `/api/accounts?firmId=1` returns JSON from Regulus.
+
+### Uploaded deploy succeeds, but environment verification fails
+
+The reported October 12 failure was checked with read-only requests: the immutable deploy URL
+served `deployment.json`, while the old `develop--` URL returned HTTP 404. This isolates the failure
+to the environment URL rather than a missing manifest in the upload. An existing branch-subdomain
+reservation is a possible cause; that account setting was not accessible from this checkout.
+
+Dev now uses the dedicated CLI alias **dev-ci**, at <https://dev-ci--mts-backoffice.netlify.app>.
+The GitHub branch remains `develop` and the GitHub secrets environment remains `dev`.
+Update bookmarks after the next deployment. The old alias is not automatically redirected.
+Do not enable Netlify branch deploys named `dev-ci`. Netlify documents that CLI aliases must not
+conflict with deployed branch names: [CLI deploy alias reference](https://cli.netlify.com/commands/deploy/).
+
+The script requests JSON output from the CLI and records the immutable deployment URL in the
+Actions summary immediately after upload. It still requires the stable environment URL to serve
+the expected commit and branch. Each unsuccessful probe reports its HTTP status or failure category;
+if retries expire, a separate immutable-deploy check distinguishes artifact availability from alias
+routing problems. A working immutable deploy does not silently turn a broken environment into success.
