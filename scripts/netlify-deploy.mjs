@@ -7,7 +7,7 @@ export const NETLIFY_CLI_VERSION = '27.5.2';
 const SITE = 'mts-backoffice';
 export function deploymentTarget(ref) {
   const targets = {
-    'refs/heads/develop': { environment: 'dev', branch: 'develop', url: `https://develop--${SITE}.netlify.app`, flags: ['--alias=develop'] },
+    'refs/heads/develop': { environment: 'dev', branch: 'develop', url: `https://dev-ci--${SITE}.netlify.app`, flags: ['--alias=dev-ci'] },
     'refs/heads/qa': { environment: 'qa', branch: 'qa', url: `https://qa--${SITE}.netlify.app`, flags: ['--alias=qa'] },
     'refs/heads/main': { environment: 'production', branch: 'main', url: `https://${SITE}.netlify.app`, flags: ['--prod'] },
   };
@@ -27,6 +27,32 @@ export function proxyDeploymentSecret(branch, value) {
   if (branch !== 'develop') return 'DISABLED';
   if (!value) throw new Error('Missing REGULUS_PROXY_TARGET. Add it to the GitHub dev environment secrets.');
   return proxyOrigin(value);
+}
+
+export function parseDeployResult(stdout) {
+  let result;
+  try { result = JSON.parse(stdout); } catch { throw new Error('Netlify uploaded the site but did not return valid deployment JSON. Check the Netlify deploy list.'); }
+  if (result?.site_name !== SITE || !/^[a-f0-9]{24}$/.test(result?.deploy_id || '')) {
+    throw new Error('Netlify returned an unexpected site or deployment ID.');
+  }
+  return { id: result.deploy_id, url: `https://${result.deploy_id}--${SITE}.netlify.app` };
+}
+
+export async function probeRevision(url, sha, branch, fetchImpl = fetch) {
+  try {
+    const response = await fetchImpl(`${url}/deployment.json?revision=${encodeURIComponent(sha)}&check=${Date.now()}`, {
+      cache: 'no-store', redirect: 'manual', signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return { ok: false, detail: `HTTP ${response.status}` };
+    let manifest;
+    try { manifest = await response.json(); } catch { return { ok: false, detail: 'HTTP 200 with a non-JSON body (check site access protection or routing)' }; }
+    if (manifest?.sha !== sha) {
+      const observed = /^[a-f0-9]{7,64}$/.test(manifest?.sha || '') ? manifest.sha : 'missing/invalid';
+      return { ok: false, detail: `revision mismatch (observed ${observed})` };
+    }
+    if (manifest.branch !== branch) return { ok: false, detail: 'branch mismatch' };
+    return { ok: true, detail: 'expected revision and branch served' };
+  } catch { return { ok: false, detail: 'network/TLS error or request timeout' }; }
 }
 
 async function deploy() {
@@ -57,7 +83,7 @@ async function deploy() {
   // Use an argument array (no shell interpolation); capture and redact CLI output.
   const result = spawnSync('npx', [
     '--yes', `--package=netlify-cli@${NETLIFY_CLI_VERSION}`, 'netlify', 'deploy',
-    '--no-build', '--dir=dist', '--functions=netlify/functions', '--timeout=300',
+    '--json', '--no-build', '--dir=dist', '--functions=netlify/functions', '--timeout=300',
     '--secret-env', `REGULUS_PROXY_TARGET=${proxyTarget}`,
     `--message=${target.environment} ${process.env.GITHUB_SHA}`,
     ...target.flags,
@@ -72,22 +98,31 @@ async function deploy() {
   if (result.error) throw new Error('Unable to run Netlify deploy. No command arguments were logged.');
   if (result.status !== 0) throw new Error(`Netlify deployment failed (${result.status}).`);
 
-  // Check the stable environment URL, not merely the CLI exit status.
+  const uploaded = parseDeployResult(result.stdout);
+  const sha = process.env.GITHUB_SHA;
+  const uploadSummary = `Uploaded **${target.environment}** revision \`${sha}\`.\n\nImmutable deploy: ${uploaded.url}\n\nEnvironment URL: ${target.url}\n`;
+  console.log(uploadSummary);
+  if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, uploadSummary);
+
+  // An uploaded deploy alone is not enough: the stable environment must serve it.
+  let lastCheck;
   for (let attempt = 0; attempt < 12; attempt++) {
-    try {
-      const response = await fetch(`${target.url}/deployment.json?revision=${process.env.GITHUB_SHA}`, {
-        cache: 'no-store', signal: AbortSignal.timeout(10000),
-      });
-      if (response.ok && (await response.json()).sha === process.env.GITHUB_SHA) {
-        const summary = `Deployed **${target.environment}**: ${target.url}\n\nRevision: \`${process.env.GITHUB_SHA}\`\n`;
-        console.log(summary);
-        if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
-        return;
-      }
-    } catch { /* Allow time for the alias/CDN to update. */ }
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    lastCheck = await probeRevision(target.url, sha, target.branch);
+    if (lastCheck.ok) {
+      const summary = `Verified **${target.environment}**: ${target.url}\n`;
+      console.log(summary);
+      if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
+      return;
+    }
+    console.log(`Environment verification ${attempt + 1}/12: ${lastCheck.detail}`);
+    if (attempt < 11) await new Promise(resolve => setTimeout(resolve, 5000));
   }
-  throw new Error(`Deployment was uploaded, but ${target.url} did not serve the expected revision. Check Netlify before retrying; no automatic rollback was performed.`);
+  const immutableCheck = await probeRevision(uploaded.url, sha, target.branch);
+  const diagnostic = `Environment verification failed: ${lastCheck.detail}. Immutable deploy: ${immutableCheck.detail}. ` +
+    (immutableCheck.ok ? 'The artifact is available; check Netlify alias/branch-subdomain conflicts and site access settings. ' : 'Check the uploaded artifact, site access settings and network availability. ') +
+    `Uploaded URL: ${uploaded.url}. Environment URL: ${target.url}. No automatic rollback was performed.`;
+  if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `\n${diagnostic}\n`);
+  throw new Error(diagnostic);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

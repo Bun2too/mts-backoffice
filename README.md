@@ -173,7 +173,7 @@ These are ready-to-upload folders, not source-code bundles. Deploy `index.html` 
 
 See [CI/CD setup and promotion guide](docs/cicd.md). The repository includes `.github/workflows/netlify.yml`:
 
-- `develop` → `https://develop--mts-backoffice.netlify.app`
+- `develop` → `https://dev-ci--mts-backoffice.netlify.app`
 - `qa` → `https://qa--mts-backoffice.netlify.app`
 - `main` → `https://mts-backoffice.netlify.app`, after successful tests and configured GitHub production-environment approval.
 
