@@ -190,12 +190,88 @@ References: [Netlify Vite deployment](https://docs.netlify.com/build/frameworks/
 Assumes you can administer an IIS site and copy files to it. If a hosting provider manages IIS, ask them to point a static website at the uploaded folder with `index.html` as the default document.
 
 1. Build locally with `pnpm package:demo`.
-2. In Windows Server Manager, enable **Web Server (IIS)** with **Static Content** and **Default Document** under Common HTTP Features. Use IIS Management Console to configure the site. No ASP.NET runtime or URL Rewrite module is needed for this app.
+2. In Windows Server Manager, enable **Web Server (IIS)** with **Static Content** and **Default Document** under Common HTTP Features. Use IIS Management Console to configure the site. Demo mode needs no ASP.NET runtime or URL Rewrite module. **API mode additionally requires URL Rewrite and ARR**, configured below.
 3. Copy the **contents** of `release/windows-iis/` to a dedicated directory such as `C:\inetpub\mts-backoffice`. `index.html`, `assets/`, and `web.config` should be directly inside it.
 4. In IIS Manager, add a website whose physical path is that directory. A dedicated application pool using **No Managed Code** is sufficient. Grant the configured anonymous/application-pool identity read access to the directory; write access is unnecessary.
 5. Add the appropriate host name and HTTP/HTTPS bindings. Configure your certificate, DNS, and hosting firewall for that site. For a local test binding on port 8080, open `http://localhost:8080` on the server.
 6. `web.config` configures `index.html` as the default document and static JSON MIME handling. Open the site and run the manual walkthrough above.
-7. To update, replace the site's static files with a newly built package. Keep `index.html` and its hashed assets from the same build together.
+7. To update, replace the site's static files with a newly built package. For API mode, preserve the server's configured `web.config` or reconfigure its target as described below. Keep `index.html` and its hashed assets from the same build together.
+
+#### IIS API proxy configuration
+
+API packages now include a reverse-proxy rule in `release/windows-iis/web.config`.
+The browser uses the IIS site's `/api/` URL; IIS forwards the request to the
+Regulus origin, which can use a different hostname, IP address, and port.
+
+On the build machine, create `.env.production.local` in the project root:
+
+```dotenv
+VITE_DATA_MODE=api
+VITE_API_BASE_URL=/api
+VITE_REGULUS_FIRM_ID=1
+REGULUS_PROXY_TARGET=http://204.155.151.162:8089
+```
+
+Then run `pnpm package:demo`. Despite the script name, it packages either mode.
+The packager reads the built mode from `dist/build-settings.json`, so packaging
+an existing API build also creates the proxy rule. The target comes from the
+build mode's Vite env files, overridden by shell environment variables. Without
+a target it defaults to `http://127.0.0.1:8080`, matching local Vite development.
+Use an origin only, without `/api`, credentials, query string, or fragment.
+
+On Windows Server:
+
+1. Install **IIS URL Rewrite 2** and **Application Request Routing (ARR) 3**.
+2. In IIS Manager, select the server → **Application Request Routing Cache** →
+   **Server Proxy Settings** → select **Enable proxy** → Apply. This is a server-level setting.
+3. Copy `release/windows-iis/` contents to the IIS site directory as above.
+4. Ensure the IIS server can reach the configured backend host and port.
+5. Verify a read request such as
+   `https://your-iis-site/api/accounts?firmId=1` returns backend JSON.
+
+For example, `/api/accounts?accountId=12345678` is forwarded to
+`http://204.155.151.162:8089/api/accounts?accountId=12345678`.
+Query strings, HTTP methods, and request bodies are preserved. Static asset
+requests are unaffected. This is an inbound rewrite, not a browser redirect;
+no browser CORS configuration is needed for this same-origin setup.
+
+To change the target **without rebuilding the frontend**, edit the `Regulus API`
+rule's action URL in the deployed `web.config`, preserving `/api/{R:1}`, or use
+the standalone helper included beside the deployment folders (requires Node):
+
+```powershell
+node .\release\configure-iis-proxy.mjs C:\inetpub\mts-backoffice http://regulus.internal:8089
+```
+
+The helper can also run on the build machine against `release/windows-iis`
+before transfer. It updates its own rule on repeated runs and refuses to replace
+unrelated custom rewrite configuration. Keep the helper outside the public site.
+When deploying future releases, **preserve the deployed `web.config`** to retain
+its target, or rerun the helper after copying the new package. Review any new
+packaged `web.config` changes before merging them into your server configuration.
+
+`VITE_*` values are public build-time frontend settings. `REGULUS_PROXY_TARGET`
+is written only to the IIS server configuration; it is not bundled into browser
+JavaScript. IIS does not read `.env` files or this environment variable at runtime.
+The IIS transfer artifact therefore contains the target in `web.config`; do not
+publish that file as a downloadable static asset on another host.
+
+This configures transport to the current unauthenticated Regulus API. It does
+not add authentication or copy Netlify's route allowlist, response sanitization,
+or error handling. If the backend requires service credentials, configure an
+authenticated server-side gateway; do not embed credentials in `VITE_*` or URLs.
+
+For a virtual directory `/backoffice/`, set `VITE_API_BASE_URL=/backoffice/api`
+and build with `--base=/backoffice/` as below. The IIS rule is relative to the
+application and still forwards to the backend's `/api/` path. A `/api` base
+instead targets the site root and needs a proxy configured at that root.
+
+Troubleshooting: a 500.19 response can indicate missing modules or locked IIS
+configuration; 502 indicates an upstream connectivity/proxy problem; 404 on
+`/api/accounts` can indicate a missing rule or incorrect application path. If
+PATCH/DELETE return 405, check for a WebDAV handler intercepting those methods.
+
+Reference: [Microsoft's IIS reverse proxy setup](https://learn.microsoft.com/en-us/iis/extensions/url-rewrite-module/reverse-proxy-with-url-rewrite-v2-and-application-request-routing).
 
 For transfer as a zip from PowerShell:
 
@@ -264,7 +340,7 @@ Set `REGULUS_PROXY_TARGET` in ignored `.env.local` for local use; the fallback i
 local demo development server, `/?data=api` also opens API mode. This query switch is disabled in
 production builds. Vite proxies `/api` in development and preview. Netlify uses the server-only
 `netlify/functions/regulus.mjs` proxy and a deploy-scoped GitHub environment secret.
-Neither the static build nor the deployment artifact contains the upstream address. IIS still needs a separately configured `/api` reverse proxy.
+The browser JavaScript does not contain the upstream address. API-mode IIS packages include a `/api` reverse-proxy rule with the target in server-only `web.config`; see [IIS API proxy configuration](#iis-api-proxy-configuration) for the required ARR setup and target changes.
 
 Available: account list/create/rename/delete; account/date selection; engine-reported balance,
 position and activity views; explicit dev cash/trade/stock posting using reviewed vendor JSON.
