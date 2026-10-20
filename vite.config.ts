@@ -22,6 +22,16 @@ export default defineConfig(({ mode }) => {
       minify: !emitSourcemaps,
     },
     plugins: [
+      {
+        name: 'deployment-settings',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'build-settings.json',
+            source: JSON.stringify({ mode, dataMode: (process.env.VITE_DATA_MODE || env.VITE_DATA_MODE) === 'api' ? 'api' : 'demo' }),
+          })
+        },
+      },
       react(),
       tailwindcss(),
       figmaSiteConfiguration(siteConfiguration),

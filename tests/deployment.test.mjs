@@ -61,3 +61,27 @@ test('verification distinguishes broken alias, stale manifest, access page and n
   assert.equal((await check(Response.json({ sha, branch: 'develop' }))).ok, true);
   assert.equal((await probeRevision(url, sha, 'develop', async () => { throw new Error('private diagnostic'); })).detail, 'network/TLS error or request timeout');
 });
+
+const { configureIisProxy } = await import('../scripts/configure-iis-proxy.mjs');
+const { readFile } = await import('node:fs/promises');
+
+test('IIS proxy targets a separate host and port while retaining static configuration', async () => {
+  const original = await readFile(new URL('../public/web.config', import.meta.url), 'utf8');
+  const configured = configureIisProxy(original, 'http://regulus.internal:8089');
+  assert.ok(configured.includes('url="http://regulus.internal:8089/api/{R:1}" appendQueryString="true"'));
+  assert.ok(configured.includes('<match url="^api/(.*)$" />'));
+  assert.ok(configured.includes('<defaultDocument enabled="true">'));
+  assert.ok(configured.includes('name="X-Content-Type-Options" value="nosniff"'));
+  const updated = configureIisProxy(configured, 'https://other.internal:9443/');
+  assert.equal((updated.match(/<rewrite>/g) || []).length, 1);
+  assert.ok(!updated.includes('regulus.internal'));
+  assert.ok(updated.includes('https://other.internal:9443/api/{R:1}'));
+});
+
+test('IIS configuration rejects credentials, malformed targets and custom rewrite replacement', () => {
+  const xml = '<configuration><system.webServer></system.webServer></configuration>';
+  for (const target of ['', undefined, 'file:///tmp/api', 'http://user:secret@host', 'http://host/api', 'http://host?x=1', 'http://host/#fragment']) {
+    assert.throws(() => configureIisProxy(xml, target), /HTTP\(S\) origin/);
+  }
+  assert.throws(() => configureIisProxy('<system.webServer><rewrite><rules /></rewrite></system.webServer>', 'http://host:8089'), /custom rewrite/);
+});
